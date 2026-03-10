@@ -3,11 +3,11 @@ AIMS CARE Hospital — Premium AI Ward Allocation System
 Flask Backend · SQLite Database · Real-Time API · Voice AI
 """
 
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, send_from_directory, Response
 from datetime import datetime, timedelta
 import sqlite3, uuid, re, os, random, threading, time
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder=None)
 DB_PATH = os.path.join(os.path.dirname(__file__), "aimscare.db")
 
 # ═══════════════════════════════════════════════════════════
@@ -264,13 +264,19 @@ def _simulate_ward_activity():
 #  API ROUTES
 # ═══════════════════════════════════════════════════════════
 @app.route("/")
-def index(): return render_template("index.html")
+def index():
+    here=os.path.dirname(os.path.abspath(__file__))
+    return send_from_directory(here,"index.html")
 
 @app.route("/pwa")
-def pwa(): return render_template("pwa.html")
+def pwa():
+    here=os.path.dirname(os.path.abspath(__file__))
+    return send_from_directory(here,"pwa.html")
 
 @app.route("/staff")
-def staff(): return render_template("staff.html")
+def staff():
+    here=os.path.dirname(os.path.abspath(__file__))
+    return send_from_directory(here,"staff.html")
 
 @app.route("/api/wards")
 def get_wards():
