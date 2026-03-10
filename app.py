@@ -3071,6 +3071,81 @@ def chatbot():
 # ═══════════════════════════════════════════════════════════
 #  STARTUP
 # ═══════════════════════════════════════════════════════════
+
+
+@app.route("/api/patients/discharge", methods=["POST"])
+def discharge_patient():
+    data = request.get_json() or {}
+    patient_id = data.get("patient_id", "")
+    if not patient_id:
+        return jsonify({"error": "patient_id required"}), 400
+    try:
+        with get_db() as db:
+            row = db.execute("SELECT * FROM patients WHERE patient_id=?", (patient_id,)).fetchone()
+            if not row:
+                return jsonify({"error": "Patient not found"}), 404
+            ward_id = row["ward_id"]
+            bed_num = row["bed_number"]
+            db.execute("UPDATE patients SET status='discharged', discharged_at=? WHERE patient_id=?",
+                      (datetime.now().isoformat(), patient_id))
+            db.execute("UPDATE wards SET occupied_beds=MAX(0,occupied_beds-1) WHERE ward_id=?", (ward_id,))
+            db.execute("""INSERT INTO bed_history (patient_id,ward_id,bed_number,action,action_time)
+                         VALUES (?,?,?,'discharge',?)""",
+                      (patient_id, ward_id, bed_num, datetime.now().isoformat()))
+            db.commit()
+        return jsonify({"success": True, "message": f"Patient {patient_id} discharged", "ward_id": ward_id, "bed_number": bed_num})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/wards/<ward_id>", methods=["PUT"])
+def update_ward(ward_id):
+    data = request.get_json() or {}
+    try:
+        with get_db() as db:
+            fields, vals = [], []
+            if "occupied_beds" in data:
+                fields.append("occupied_beds=?"); vals.append(int(data["occupied_beds"]))
+            if "total_beds" in data:
+                fields.append("total_beds=?"); vals.append(int(data["total_beds"]))
+            if "status" in data:
+                fields.append("status=?"); vals.append(data["status"])
+            if not fields:
+                return jsonify({"error": "No fields to update"}), 400
+            vals.append(ward_id)
+            db.execute(f"UPDATE wards SET {','.join(fields)} WHERE ward_id=?", vals)
+            db.commit()
+        return jsonify({"success": True, "ward_id": ward_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/patients/<patient_id>", methods=["GET"])
+def get_patient(patient_id):
+    try:
+        with get_db() as db:
+            row = db.execute("SELECT * FROM patients WHERE patient_id=?", (patient_id,)).fetchone()
+            if not row:
+                return jsonify({"error": "Not found"}), 404
+            return jsonify(dict(row))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/staff", methods=["GET"])
+def get_staff():
+    staff = [
+        {"id":"ST-001","name":"Dr. Ramesh Kumar","role":"Doctor","dept":"ICU / Pulmonology","shift":"Day 8AM-8PM","status":"on-duty"},
+        {"id":"ST-002","name":"Dr. Meera Singh","role":"Cardiologist","dept":"Cardiology","shift":"Day 8AM-8PM","status":"on-duty"},
+        {"id":"ST-003","name":"Nurse Kamala Devi","role":"Head Nurse","dept":"ICU","shift":"Night 8PM-8AM","status":"off-duty"},
+        {"id":"ST-004","name":"Dr. Suresh Rao","role":"Surgeon","dept":"Surgical","shift":"Day 8AM-8PM","status":"on-duty"},
+        {"id":"ST-005","name":"Dr. Kavitha Nair","role":"Paediatrician","dept":"Paediatrics","shift":"Day 8AM-8PM","status":"on-duty"},
+        {"id":"ST-006","name":"Mr. Admin Reddy","role":"Administrator","dept":"Admin","shift":"Day 9AM-6PM","status":"on-duty"}
+    ]
+    return jsonify(staff)
+
+@app.route("/api/health", methods=["GET"])
+def health():
+    return jsonify({"status":"ok","time":datetime.now().isoformat(),"db":"sqlite"})
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host="0.0.0.0", port=port)
